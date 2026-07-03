@@ -584,6 +584,11 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     }
+    async function deleteJson(url) {
+      const res = await fetch(url, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
     function minutes(value) {
       const [hh, mm] = value.split(":").map(Number);
       return hh * 60 + mm;
@@ -843,6 +848,22 @@
       saveState();
       renderAll();
     }
+    async function resetStudentAvailability() {
+      state.choices = {};
+      delete state.responses[anonId()];
+      $("submitState").textContent = "已重置您的选择。";
+      if (isOnlineMode()) {
+        try {
+          await deleteJson(meetingUrl(`/responses/${anonId()}`));
+          await refreshCounts(true);
+          $("submitState").textContent = "已重置您的选择，并从匿名统计中移除。";
+        } catch (err) {
+          $("submitState").textContent = "本机选择已重置，但在线统计更新失败，请稍后再试。";
+        }
+      }
+      saveState();
+      renderAll();
+    }
     function parsePayload() {
       const match = location.hash.match(/meeting=([^&]+)/);
       if (!match) return null;
@@ -947,11 +968,7 @@
         saveState();
         renderAll();
       });
-      $("resetStudent").addEventListener("click", () => {
-        state.choices = {};
-        saveState();
-        renderAll();
-      });
+      $("resetStudent").addEventListener("click", resetStudentAvailability);
       $("submitAvailability").addEventListener("click", submitAvailability);
       window.addEventListener("hashchange", () => applyPayload(parsePayload()));
     }
