@@ -864,6 +864,28 @@
       saveState();
       renderAll();
     }
+    async function clearOrganizerMeeting() {
+      const oldMeetingId = state.id;
+      const canDeleteOnline = isOnlineMode();
+      if (canDeleteOnline) {
+        try {
+          await deleteJson(meetingUrl(""));
+          message("已清空线上会议记录。");
+        } catch (err) {
+          message("本地已清空，但线上记录删除失败，请稍后再试。", "warn");
+        }
+      }
+      state.id = uid("meeting");
+      state.slots = [];
+      state.responses = {};
+      state.choices = {};
+      state.shareLink = "";
+      $("shareLink").textContent = "请先添加候选时段。";
+      if (state.poller) window.clearInterval(state.poller);
+      saveState();
+      renderAll();
+      if (!canDeleteOnline && oldMeetingId) message("已清空本地会议内容。");
+    }
     function parsePayload() {
       const match = location.hash.match(/meeting=([^&]+)/);
       if (!match) return null;
@@ -948,15 +970,7 @@
       $("organizerTab").addEventListener("click", () => switchMode("organizer"));
       $("studentTab").addEventListener("click", () => switchMode("student"));
       $("addSlots").addEventListener("click", addSlots);
-      $("clearSlots").addEventListener("click", () => {
-        state.slots = [];
-        state.responses = {};
-        state.choices = {};
-        state.shareLink = "";
-        $("shareLink").textContent = "请先添加候选时段。";
-        saveState();
-        renderAll();
-      });
+      $("clearSlots").addEventListener("click", clearOrganizerMeeting);
       $("makeLink").addEventListener("click", publishMeeting);
       $("copyLink").addEventListener("click", () => {
         if (state.shareLink) copyText(state.shareLink, "已复制学生链接。");
