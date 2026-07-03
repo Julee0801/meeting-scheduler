@@ -488,13 +488,14 @@
     const $ = (id) => document.getElementById(id);
     const LS_KEY = "lzj_meeting_scheduler_online_v2";
     const ANON_KEY = "lzj_meeting_anon_id";
+    const DEFAULT_DATABASE_URL = "";
     const state = {
       id: "",
       title: "刘梓君课题组例会",
       place: "线上会议 / 广东医科大学",
       duration: 60,
       timezone: "Asia/Hong_Kong",
-      databaseUrl: "",
+      databaseUrl: DEFAULT_DATABASE_URL,
       slots: [],
       choices: {},
       responses: {},
@@ -550,11 +551,24 @@
     function normalizeDb(url) {
       return (url || "").trim().replace(/\/+$/, "");
     }
+    function configuredDatabaseUrl() {
+      return normalizeDb(state.databaseUrl || DEFAULT_DATABASE_URL);
+    }
     function isOnlineMode() {
-      return Boolean(normalizeDb(state.databaseUrl) && state.id);
+      return Boolean(configuredDatabaseUrl() && state.id);
     }
     function meetingUrl(path = "") {
-      return `${normalizeDb(state.databaseUrl)}/meetings/${encodeURIComponent(state.id)}${path}.json`;
+      return `${configuredDatabaseUrl()}/meetings/${encodeURIComponent(state.id)}${path}.json`;
+    }
+    function pageBaseUrl() {
+      return `${location.origin}${location.pathname}`;
+    }
+    function compactShareLink() {
+      const params = new URLSearchParams({ m: state.id });
+      if (configuredDatabaseUrl() && configuredDatabaseUrl() !== normalizeDb(DEFAULT_DATABASE_URL)) {
+        params.set("db", encodeData(configuredDatabaseUrl()));
+      }
+      return `${pageBaseUrl()}?${params.toString()}`;
     }
     async function putJson(url, data) {
       const res = await fetch(url, {
@@ -623,7 +637,7 @@
       $("meetingPlace").value = state.place;
       $("duration").value = String(state.duration);
       $("timezone").value = state.timezone;
-      $("databaseUrl").value = state.databaseUrl || "";
+      $("databaseUrl").value = configuredDatabaseUrl() || "";
       $("slotDate").value ||= todayValue();
     }
     function message(text, kind = "info") {
@@ -752,7 +766,7 @@
         place: state.place,
         duration: state.duration,
         timezone: state.timezone,
-        databaseUrl: state.databaseUrl,
+        databaseUrl: configuredDatabaseUrl(),
         slots: state.slots
       };
       if (isOnlineMode()) {
@@ -773,7 +787,7 @@
       } else {
         message("已生成离线链接。若要自动统计，请配置 Firebase。", "warn");
       }
-      state.shareLink = `${location.href.split("#")[0]}#meeting=${encodeData(payload)}`;
+      state.shareLink = isOnlineMode() ? compactShareLink() : `${pageBaseUrl()}#meeting=${encodeData(payload)}`;
       $("shareLink").textContent = state.shareLink;
       saveState();
       startPolling();
@@ -838,6 +852,43 @@
         return null;
       }
     }
+    async function applyShortLink() {
+      const params = new URLSearchParams(location.search);
+      const meetingId = params.get("m");
+      if (!meetingId) return false;
+      state.id = meetingId;
+      if (params.get("db")) {
+        try {
+          state.databaseUrl = normalizeDb(decodeData(params.get("db")));
+        } catch (err) {
+          return false;
+        }
+      } else {
+        state.databaseUrl = configuredDatabaseUrl();
+      }
+      if (!configuredDatabaseUrl()) return false;
+      syncInputs();
+      switchMode("student");
+      try {
+        const data = await getJson(meetingUrl(""));
+        if (!data) return false;
+        state.title = data.title || state.title;
+        state.place = data.place || state.place;
+        state.duration = data.duration || state.duration;
+        state.timezone = data.timezone || state.timezone;
+        state.slots = Array.isArray(data.slots) ? data.slots : [];
+        state.responses = data.responses || {};
+        syncInputs();
+        saveState();
+        startPolling();
+        renderAll();
+        return true;
+      } catch (err) {
+        $("submitState").textContent = "无法读取在线会议，请检查链接或 Firebase 设置。";
+        renderAll();
+        return false;
+      }
+    }
     function applyPayload(payload) {
       if (!payload || !Array.isArray(payload.slots)) return false;
       state.id = payload.id || state.id || uid("meeting");
@@ -845,7 +896,7 @@
       state.place = payload.place || state.place;
       state.duration = payload.duration || state.duration;
       state.timezone = payload.timezone || state.timezone;
-      state.databaseUrl = normalizeDb(payload.databaseUrl || state.databaseUrl);
+      state.databaseUrl = normalizeDb(payload.databaseUrl || state.databaseUrl || DEFAULT_DATABASE_URL);
       state.slots = payload.slots;
       syncInputs();
       saveState();
@@ -908,10 +959,13 @@
     loadState();
     syncInputs();
     bindEvents();
-    if (!applyPayload(parsePayload())) {
-      renderAll();
-      startPolling();
-    }
+    applyShortLink().then((usedShortLink) => {
+      if (usedShortLink) return;
+      if (!applyPayload(parsePayload())) {
+        renderAll();
+        startPolling();
+      }
+    });
   </script>
 </body>
 </html>

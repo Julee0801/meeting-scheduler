@@ -29,3 +29,12 @@ Use Firebase Realtime Database:
 5. Open the scheduler page as organizer, paste the database URL, add time slots, then generate the student link.
 
 Students submit anonymously. The page stores only an anonymous browser ID and availability choices.
+
+## Short links
+
+When a Firebase URL is pasted in the organizer screen, the generated student link uses a compact meeting ID.
+
+If the Firebase URL is not hardcoded in the page, the link includes `db=...` so students can read the same database.
+If `DEFAULT_DATABASE_URL` in `index.html` is set to the Firebase URL, links become shorter:
+
+`https://julee0801.github.io/meeting-scheduler/?m=meeting_id`
